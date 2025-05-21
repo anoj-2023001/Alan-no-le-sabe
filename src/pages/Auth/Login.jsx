@@ -1,71 +1,63 @@
-"use client"
-
-import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import "../../styles/auth.css"
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth"
-import { auth } from "../../firebase"
-import axios from "axios"
+import { useState } from "react"; //jefe de verdad nos va a dejar? ya en el ultimo commit/bimestre?
+import { Link, useNavigate } from "react-router-dom"; 
+import "../../styles/auth.css"; 
+import axios from "axios";
+import { loginUser, loginWithGoogle } from "../../services/auth";
+import { validateFields } from "../../hooks/useAuthForm";
+import { useAuth } from "../../context/AuthContext";
 
 const Login = () => {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [errors, setErrors] = useState({})
-  const navigate = useNavigate()
-
-  const validateForm = () => {
-    const newErrors = {}
-    if (!email) newErrors.email = "El email es requerido"
-    if (!password) newErrors.password = "La contraseña es requerida"
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState({});
+  const navigate = useNavigate();
+  const { loginWithToken } = useAuth();
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!validateForm()) return
+    e.preventDefault();
+    const validationErrors = validateFields({ email, password });
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) return;
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      const user = userCredential.user
+      await loginUser(email, password);
+      const response = await axios.post("http://localhost:5500/api/auth/login", { email, password });
 
-      const response = await axios.post("http://localhost:5500/api/auth/login", {
-        email,
-        password
-      })
+      const token = response.data.token;
+      loginWithToken(token);
 
-      console.log("Login exitoso:", response.data)
-      localStorage.setItem("token", response.data.token)
-      alert(`Bienvenido ${response.data.loggedUser.name}`)
-      navigate("/dashboard")
-
+      const role = response.data.loggedUser.role;
+      if (role === "adminPlataforma") navigate("/admin");
+      else if (role === "adminHotel") navigate("/hotel-admin");
+      else navigate("/app");
     } catch (error) {
-      console.error("Error al iniciar sesión:", error)
-      setErrors({ general: "Credenciales inválidas o usuario no registrado." })
+      console.error("Error al iniciar sesión:", error);
+      setErrors({ general: "Credenciales inválidas o usuario no registrado." });
     }
-  }
+  };
 
   const handleGoogleLogin = async () => {
     try {
-      const provider = new GoogleAuthProvider()
-      const result = await signInWithPopup(auth, provider)
-      const user = result.user
+      const result = await loginWithGoogle();
+      const user = result.user;
 
       const response = await axios.post("http://localhost:5500/api/auth/login", {
         email: user.email,
-        password: user.uid
-      })
+        password: user.uid,
+      });
 
-      console.log("Login con Google exitoso:", response.data)
-      localStorage.setItem("token", response.data.token)
-      alert(`Bienvenido ${response.data.loggedUser.name}`)
-      navigate("/dashboard")
+      const token = response.data.token;
+      loginWithToken(token);
 
+      const role = response.data.loggedUser.role;
+      if (role === "adminPlataforma") navigate("/admin");
+      else if (role === "adminHotel") navigate("/hotel-admin");
+      else navigate("/app");
     } catch (error) {
-      console.error("Error con Google Login:", error)
-      setErrors({ general: "No se encontró cuenta. Regístrate primero." })
+      console.error("Error con Google Login:", error);
+      setErrors({ general: "No se encontró cuenta. Regístrate primero." });
     }
-  }
+  };
 
   return (
     <div className="auth-container">
@@ -78,12 +70,12 @@ const Login = () => {
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@ejemplo.com" />
+            <label>Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="form-group">
-            <label htmlFor="password">Contraseña</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña" />
+            <label>Contraseña</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
           {errors.general && <span className="error-message">{errors.general}</span>}
           <button type="submit" className="auth-button">Iniciar Sesión</button>
@@ -95,7 +87,7 @@ const Login = () => {
         </form>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default Login
+export default Login;
